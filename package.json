@@ -1,6 +1,6 @@
 {
   "name": "ssh-tui",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "TUI command to manage and connect to SSH servers from ~/.ssh/config",
   "type": "module",
   "bin": {
