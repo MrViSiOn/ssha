@@ -108,7 +108,7 @@ async function cmdConnect(configPath: string): Promise<void> {
     return;
   }
 
-  const selected = await selectHost(hosts, { usage });
+  const selected = await selectHost(hosts, { usage, checkConnectivity: true });
   if (!selected) return;
 
   recordUsage(selected.alias);

@@ -1,4 +1,6 @@
 import * as readline from "node:readline";
+import { checkHost } from "./checker.js";
+import type { HostStatus } from "./checker.js";
 import type { SshHost } from "./types.js";
 import type { UsageMap } from "./usage.js";
 import { formatAge } from "./usage.js";
@@ -7,6 +9,7 @@ const C = {
   reset: "\x1b[0m",
   bold: "\x1b[1m",
   green: "\x1b[32m",
+  red: "\x1b[31m",
   cyan: "\x1b[36m",
   yellow: "\x1b[33m",
   gray: "\x1b[90m",
@@ -20,6 +23,7 @@ const C = {
 interface SelectOptions {
   title?: string;
   usage?: UsageMap;
+  checkConnectivity?: boolean;
 }
 
 function filterHosts(hosts: SshHost[], query: string): SshHost[] {
@@ -34,8 +38,20 @@ function filterHosts(hosts: SshHost[], query: string): SshHost[] {
   );
 }
 
-function hostLine(host: SshHost, selected: boolean, usage: UsageMap): string {
+function statusDot(status: HostStatus | undefined): string {
+  if (!status || status === "checking") return `${C.gray}·${C.reset} `;
+  if (status === "up") return `${C.green}●${C.reset} `;
+  return `${C.red}●${C.reset} `;
+}
+
+function hostLine(
+  host: SshHost,
+  selected: boolean,
+  usage: UsageMap,
+  status?: HostStatus,
+): string {
   const arrow = selected ? `${C.green}›${C.reset} ` : "  ";
+  const dot = statusDot(status);
   const alias = selected ? `${C.bold}${host.alias}${C.reset}` : host.alias;
   const user = host.user ? ` ${C.cyan}${host.user}@${C.reset}` : "";
   const hn =
@@ -48,12 +64,16 @@ function hostLine(host: SshHost, selected: boolean, usage: UsageMap): string {
     host.tags.length > 0 ? ` ${C.gray}[${host.tags.join(", ")}]${C.reset}` : "";
   const ts = usage[host.alias];
   const age = ts ? ` ${C.gray}${formatAge(ts)}${C.reset}` : "";
-  return `${arrow}${alias}${user}${hn}${port}${tags}${age}`;
+  return `${arrow}${dot}${alias}${user}${hn}${port}${tags}${age}`;
 }
 
 export async function selectHost(
   hosts: SshHost[],
-  { title = "Select SSH server", usage = {} }: SelectOptions = {},
+  {
+    title = "Select SSH server",
+    usage = {},
+    checkConnectivity = false,
+  }: SelectOptions = {},
 ): Promise<SshHost | null> {
   if (!process.stdin.isTTY) {
     console.error("Error: interactive selection requires a TTY.");
@@ -67,6 +87,8 @@ export async function selectHost(
     let rendered = 0;
     let query = "";
     let filtered = hosts;
+    let active = true;
+    const statusMap: Record<string, HostStatus> = {};
 
     const buildLines = (): string[] => {
       const searchBar = query
@@ -75,7 +97,9 @@ export async function selectHost(
 
       const hostLines =
         filtered.length > 0
-          ? filtered.map((h, i) => hostLine(h, i === index, usage))
+          ? filtered.map((h, i) =>
+              hostLine(h, i === index, usage, statusMap[h.alias]),
+            )
           : [`  ${C.gray}No matches for "${query}"${C.reset}`];
 
       return [
@@ -103,6 +127,7 @@ export async function selectHost(
     };
 
     const exit = (result: SshHost | null) => {
+      active = false;
       process.stdin.off("data", onData);
       cleanup();
       resolve(result);
@@ -180,6 +205,17 @@ export async function selectHost(
         return;
       }
     };
+
+    if (checkConnectivity) {
+      for (const host of hosts) {
+        statusMap[host.alias] = "checking";
+        checkHost(host).then((status) => {
+          if (!active) return;
+          statusMap[host.alias] = status;
+          render();
+        });
+      }
+    }
 
     process.stdin.on("data", onData);
 
