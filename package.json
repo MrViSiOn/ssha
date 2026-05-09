@@ -37,6 +37,9 @@
     "hooks:install": "git config core.hooksPath .githooks",
     "prepublishOnly": "pnpm build && pnpm lint && pnpm fmt:check"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "oxlint": "^1.0.0",
