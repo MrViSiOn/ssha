@@ -20,7 +20,7 @@ jobs:
         with:
           version: latest
 
-      - run: pnpm install
+      - run: pnpm install --ignore-scripts
 
       - run: pnpm build
 
