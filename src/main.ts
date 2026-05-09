@@ -3,9 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { checkHostTimed } from "./checker.js";
+import { openInNewWindow } from "./multi.js";
 import { addHost, editHost, parseHosts, removeHost } from "./parser.js";
 import { connect } from "./ssh.js";
-import { confirm, prompt, selectHost } from "./tui.js";
+import { confirm, prompt, selectHost, selectMultipleHosts } from "./tui.js";
 import type { CliArgs, Command, Tunnel } from "./types.js";
 import { readUsage, recordUsage, sortByLastUse } from "./usage.js";
 
@@ -23,6 +24,7 @@ USAGE
   ssha check            test connectivity to all servers
   ssha remove, rm       pick and remove a server
   ssha list, ls         list all configured servers
+  ssha multi            pick multiple servers and open each in a new window
 
 OPTIONS
   --config <path>       use alternative SSH config (default: ~/.ssh/config)
@@ -39,6 +41,7 @@ EXAMPLES
   ssha rm               pick and remove a server
   ssha ls               show all configured servers
   ssha ls --json        list servers as JSON
+  ssha multi            open multiple SSH connections in new windows/tabs
 `.trim();
 
 function parseCliArgs(): CliArgs {
@@ -73,6 +76,9 @@ function parseCliArgs(): CliArgs {
       case "list":
       case "ls":
         command = "list";
+        break;
+      case "multi":
+        command = "multi";
         break;
       case "--config":
         configPath = args[++i] ?? configPath;
@@ -423,6 +429,47 @@ async function cmdRemove(configPath: string): Promise<void> {
   console.log(`✓ Server '${selected.alias}' removed.`);
 }
 
+async function cmdMulti(configPath: string): Promise<void> {
+  if (!existsSync(configPath)) {
+    console.log(
+      "No SSH config found. Run `ssha add` to add your first server.",
+    );
+    return;
+  }
+
+  const usage = readUsage();
+  const hosts = sortByLastUse(
+    parseHosts(readFileSync(configPath, "utf-8")),
+    usage,
+  );
+
+  if (hosts.length === 0) {
+    console.log("No servers configured. Run `ssha add` to add one.");
+    return;
+  }
+
+  const selected = await selectMultipleHosts(hosts, { usage });
+  if (selected.length === 0) return;
+
+  const failed: string[] = [];
+  for (const host of selected) {
+    recordUsage(host.alias);
+    if (!openInNewWindow(host.alias)) failed.push(host.alias);
+  }
+
+  if (failed.length > 0) {
+    console.error(
+      `Could not open new window for: ${failed.join(", ")}\n` +
+        "No supported terminal emulator found (Windows Terminal, iTerm2, Terminal.app, tmux, gnome-terminal, xterm).",
+    );
+    process.exit(1);
+  } else {
+    console.log(
+      `✓ Opened ${selected.length} connection${selected.length > 1 ? "s" : ""}`,
+    );
+  }
+}
+
 function pad(s: string, w: number): string {
   return s.length >= w ? s : s + " ".repeat(w - s.length);
 }
@@ -523,6 +570,9 @@ async function main(): Promise<void> {
       break;
     case "list":
       cmdList(args.configPath, args.jsonOutput);
+      break;
+    case "multi":
+      await cmdMulti(args.configPath);
       break;
   }
 }

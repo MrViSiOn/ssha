@@ -31,7 +31,8 @@ export type Command =
   | "list"
   | "edit"
   | "copy"
-  | "check";
+  | "check"
+  | "multi";
 
 export interface EditOptions {
   hostname: string;
