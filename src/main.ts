@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { addHost, editHost, parseHosts, removeHost } from "./parser.js";
 import { connect } from "./ssh.js";
 import { confirm, prompt, selectHost } from "./tui.js";
-import type { CliArgs, Command } from "./types.js";
+import type { CliArgs, Command, Tunnel } from "./types.js";
 import { readUsage, recordUsage, sortByLastUse } from "./usage.js";
 
 const VERSION = "0.1.0";
@@ -108,11 +108,33 @@ async function cmdConnect(configPath: string): Promise<void> {
     return;
   }
 
-  const selected = await selectHost(hosts, { usage, checkConnectivity: true });
+  let withTunnel = false;
+  const selected = await selectHost(hosts, {
+    usage,
+    checkConnectivity: true,
+    onTunnel: () => {
+      withTunnel = true;
+    },
+  });
   if (!selected) return;
 
   recordUsage(selected.alias);
-  connect(selected.alias);
+  connect(selected.alias, withTunnel ? selected.tunnels : []);
+}
+
+function parseTunnelList(input: string): Tunnel[] {
+  return input
+    .split(",")
+    .map((s) => {
+      const parts = s.trim().split(":");
+      if (parts.length < 3) return null;
+      const localPort = parseInt(parts[0], 10);
+      const remotePort = parseInt(parts[parts.length - 1], 10);
+      const remoteHost = parts.slice(1, -1).join(":");
+      if (isNaN(localPort) || isNaN(remotePort) || !remoteHost) return null;
+      return { localPort, remoteHost, remotePort };
+    })
+    .filter((t): t is Tunnel => t !== null);
 }
 
 async function cmdAdd(configPath: string): Promise<void> {
@@ -136,6 +158,11 @@ async function cmdAdd(configPath: string): Promise<void> {
     .map((t) => t.trim())
     .filter(Boolean);
 
+  const tunnelsStr = await prompt(
+    "Port forwards (e.g. 8080:localhost:80, 5432:db:5432)",
+  );
+  const tunnels = parseTunnelList(tunnelsStr);
+
   addHost(configPath, {
     alias,
     hostname,
@@ -143,6 +170,7 @@ async function cmdAdd(configPath: string): Promise<void> {
     port: portStr ? parseInt(portStr, 10) : undefined,
     identityFilePath: identityFilePath || undefined,
     tags,
+    tunnels,
   });
 
   console.log(`\n✓ Server '${alias}' added to ${configPath}`);
@@ -282,12 +310,23 @@ async function cmdEdit(configPath: string): Promise<void> {
     .map((t) => t.trim())
     .filter(Boolean);
 
+  const tunnelsDefault = selected.tunnels
+    .map((t) => `${t.localPort}:${t.remoteHost}:${t.remotePort}`)
+    .join(", ");
+  const tunnelsStr = await prompt(
+    "Port forwards (e.g. 8080:localhost:80)",
+    false,
+    tunnelsDefault,
+  );
+  const tunnels = parseTunnelList(tunnelsStr);
+
   editHost(configPath, selected.alias, {
     hostname: hostname || selected.hostname,
     user: user || null,
     port: portStr ? parseInt(portStr, 10) : null,
     identityFilePath,
     tags,
+    tunnels,
   });
 
   console.log(`\n✓ Server '${selected.alias}' updated.`);

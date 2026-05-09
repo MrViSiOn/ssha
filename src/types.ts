@@ -1,3 +1,9 @@
+export interface Tunnel {
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
+}
+
 export interface SshHost {
   alias: string;
   hostname: string;
@@ -5,6 +11,7 @@ export interface SshHost {
   port?: number;
   hasIdentityFile: boolean;
   tags: string[];
+  tunnels: Tunnel[];
 }
 
 export interface AddOptions {
@@ -14,6 +21,7 @@ export interface AddOptions {
   port?: number;
   identityFilePath?: string;
   tags?: string[];
+  tunnels?: Tunnel[];
 }
 
 export type Command = "connect" | "add" | "remove" | "list" | "edit" | "copy";
@@ -24,6 +32,7 @@ export interface EditOptions {
   port: number | null;
   identityFilePath?: string | null;
   tags: string[];
+  tunnels: Tunnel[];
 }
 
 export interface CliArgs {

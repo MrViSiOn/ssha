@@ -24,6 +24,7 @@ interface SelectOptions {
   title?: string;
   usage?: UsageMap;
   checkConnectivity?: boolean;
+  onTunnel?: (host: SshHost) => void;
 }
 
 function filterHosts(hosts: SshHost[], query: string): SshHost[] {
@@ -73,6 +74,7 @@ export async function selectHost(
     title = "Select SSH server",
     usage = {},
     checkConnectivity = false,
+    onTunnel,
   }: SelectOptions = {},
 ): Promise<SshHost | null> {
   if (!process.stdin.isTTY) {
@@ -102,8 +104,14 @@ export async function selectHost(
             )
           : [`  ${C.gray}No matches for "${query}"${C.reset}`];
 
+      const hasTunnels =
+        filtered.length > 0 && (filtered[index]?.tunnels.length ?? 0) > 0;
+      const tunnelHint = hasTunnels
+        ? ` · ${C.yellow}f${C.reset}${C.gray} tunnel${C.reset}`
+        : "";
+
       return [
-        `${C.bold}  ${title}${C.reset} ${C.gray}(↑↓ · Enter · Esc clear · q quit)${C.reset}`,
+        `${C.bold}  ${title}${C.reset} ${C.gray}(↑↓ · Enter · Esc · q quit${C.reset}${tunnelHint}${C.gray})${C.reset}`,
         searchBar,
         "",
         ...hostLines,
@@ -194,6 +202,16 @@ export async function selectHost(
       if (key === "q" && !query) {
         exit(null);
         return;
+      }
+
+      // 'f' launches with port forwarding if server has tunnels
+      if (key === "f" && !query && filtered.length > 0) {
+        const host = filtered[index];
+        if (host.tunnels.length > 0) {
+          onTunnel?.(host);
+          exit(host);
+          return;
+        }
       }
 
       // Printable characters → append to search query

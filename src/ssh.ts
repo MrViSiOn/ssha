@@ -1,7 +1,15 @@
 import { spawn } from "node:child_process";
+import type { Tunnel } from "./types.js";
 
-export function connect(alias: string): void {
-  const proc = spawn("ssh", [alias], { stdio: "inherit", shell: false });
+export function connect(alias: string, tunnels: Tunnel[] = []): void {
+  const forwardArgs = tunnels.flatMap((t) => [
+    "-L",
+    `${t.localPort}:${t.remoteHost}:${t.remotePort}`,
+  ]);
+  const proc = spawn("ssh", [...forwardArgs, alias], {
+    stdio: "inherit",
+    shell: false,
+  });
 
   proc.on("error", (err) => {
     const code = (err as NodeJS.ErrnoException).code;

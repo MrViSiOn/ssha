@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { AddOptions, EditOptions, SshHost } from "./types.js";
+import type { AddOptions, EditOptions, SshHost, Tunnel } from "./types.js";
 
 interface HostBlock {
   alias: string;
@@ -9,6 +9,7 @@ interface HostBlock {
   port?: number;
   identityFilePath?: string;
   tags?: string[];
+  tunnels?: Tunnel[];
 }
 
 function parseKey(line: string): { key: string; value: string } | null {
@@ -34,6 +35,7 @@ function toSshHost(block: HostBlock): SshHost {
     port: block.port,
     hasIdentityFile: !!block.identityFilePath,
     tags: block.tags ?? [],
+    tunnels: block.tunnels ?? [],
   };
 }
 
@@ -50,6 +52,31 @@ function tagsLine(tags: string[]): string {
   return `    # ssha:tags=${tags.join(",")}`;
 }
 
+function parseTunnels(line: string): Tunnel[] | null {
+  const match = line.trim().match(/^#\s*ssha:tunnels=(.*)$/);
+  if (!match) return null;
+  return match[1]
+    .split(",")
+    .map((s) => {
+      const parts = s.trim().split(":");
+      if (parts.length < 3) return null;
+      const localPort = parseInt(parts[0], 10);
+      const remotePort = parseInt(parts[parts.length - 1], 10);
+      const remoteHost = parts.slice(1, -1).join(":");
+      if (isNaN(localPort) || isNaN(remotePort) || !remoteHost) return null;
+      return { localPort, remoteHost, remotePort };
+    })
+    .filter((t): t is Tunnel => t !== null);
+}
+
+function tunnelToStr(t: Tunnel): string {
+  return `${t.localPort}:${t.remoteHost}:${t.remotePort}`;
+}
+
+function tunnelsLine(tunnels: Tunnel[]): string {
+  return `    # ssha:tunnels=${tunnels.map(tunnelToStr).join(",")}`;
+}
+
 export function parseHosts(content: string): SshHost[] {
   const hosts: SshHost[] = [];
   let current: HostBlock | null = null;
@@ -58,6 +85,12 @@ export function parseHosts(content: string): SshHost[] {
     const tags = parseTags(line);
     if (tags && current) {
       current.tags = tags;
+      continue;
+    }
+
+    const tunnels = parseTunnels(line);
+    if (tunnels && current) {
+      current.tunnels = tunnels;
       continue;
     }
 
@@ -106,6 +139,8 @@ export function addHost(configPath: string, opts: AddOptions): void {
 
   let block = `\nHost ${opts.alias}\n`;
   if (opts.tags && opts.tags.length > 0) block += `${tagsLine(opts.tags)}\n`;
+  if (opts.tunnels && opts.tunnels.length > 0)
+    block += `${tunnelsLine(opts.tunnels)}\n`;
   block += `    HostName ${opts.hostname}\n`;
   if (opts.user) block += `    User ${opts.user}\n`;
   if (opts.port && opts.port !== 22) block += `    Port ${opts.port}\n`;
@@ -195,6 +230,7 @@ export function editHost(
 
   const blockLines: string[] = [`Host ${alias}`];
   if (opts.tags.length > 0) blockLines.push(tagsLine(opts.tags));
+  if (opts.tunnels.length > 0) blockLines.push(tunnelsLine(opts.tunnels));
   blockLines.push(`    HostName ${opts.hostname}`);
   if (opts.user) blockLines.push(`    User ${opts.user}`);
   if (opts.port && opts.port !== 22) blockLines.push(`    Port ${opts.port}`);
