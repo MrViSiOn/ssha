@@ -1,6 +1,6 @@
 {
   "name": "ssh-tui",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TUI command to manage and connect to SSH servers from ~/.ssh/config",
   "type": "module",
   "bin": {
@@ -38,7 +38,9 @@
     "prepublishOnly": "pnpm build && pnpm lint && pnpm fmt:check"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
