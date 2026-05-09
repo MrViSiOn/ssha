@@ -24,7 +24,14 @@ export interface AddOptions {
   tunnels?: Tunnel[];
 }
 
-export type Command = "connect" | "add" | "remove" | "list" | "edit" | "copy";
+export type Command =
+  | "connect"
+  | "add"
+  | "remove"
+  | "list"
+  | "edit"
+  | "copy"
+  | "check";
 
 export interface EditOptions {
   hostname: string;

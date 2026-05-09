@@ -28,3 +28,12 @@ export function checkHost(
     });
   });
 }
+
+export async function checkHostTimed(
+  host: SshHost,
+  timeout = 3000,
+): Promise<{ status: "up" | "down"; ms: number }> {
+  const start = Date.now();
+  const status = await checkHost(host, timeout);
+  return { status, ms: Date.now() - start };
+}

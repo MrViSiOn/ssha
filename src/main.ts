@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { checkHostTimed } from "./checker.js";
 import { addHost, editHost, parseHosts, removeHost } from "./parser.js";
 import { connect } from "./ssh.js";
 import { confirm, prompt, selectHost } from "./tui.js";
@@ -19,6 +20,7 @@ USAGE
   ssha add              add a new server to ~/.ssh/config
   ssha edit             pick and edit an existing server
   ssha copy [alias]     copy ssh command to clipboard
+  ssha check            test connectivity to all servers
   ssha remove, rm       pick and remove a server
   ssha list, ls         list all configured servers
 
@@ -60,6 +62,9 @@ function parseCliArgs(): CliArgs {
       case "copy":
         command = "copy";
         if (args[i + 1] && !args[i + 1].startsWith("-")) target = args[++i];
+        break;
+      case "check":
+        command = "check";
         break;
       case "remove":
       case "rm":
@@ -174,6 +179,57 @@ async function cmdAdd(configPath: string): Promise<void> {
   });
 
   console.log(`\n✓ Server '${alias}' added to ${configPath}`);
+}
+
+async function cmdCheck(configPath: string): Promise<void> {
+  if (!existsSync(configPath)) {
+    console.log(
+      "No SSH config found. Run `ssha add` to add your first server.",
+    );
+    return;
+  }
+
+  const hosts = parseHosts(readFileSync(configPath, "utf-8"));
+
+  if (hosts.length === 0) {
+    console.log("No servers configured. Run `ssha add` to add one.");
+    return;
+  }
+
+  const B = "\x1b[1m";
+  const R = "\x1b[0m";
+  const G = "\x1b[32m";
+  const RED = "\x1b[31m";
+  const GR = "\x1b[90m";
+
+  const aw = Math.max(...hosts.map((h) => h.alias.length));
+  const hw = Math.max(
+    ...hosts.map((h) => `${h.hostname}:${h.port ?? 22}`.length),
+  );
+
+  console.log(`\n  Checking ${B}${hosts.length}${R} servers...\n`);
+
+  const results = await Promise.all(
+    hosts.map(async (host) => {
+      const { status, ms } = await checkHostTimed(host);
+      const dot = status === "up" ? `${G}●${R}` : `${RED}●${R}`;
+      const label = status === "up" ? `${G}OK${R}` : `${RED}UNREACHABLE${R}`;
+      const addr = `${host.hostname}:${host.port ?? 22}`;
+      console.log(
+        `  ${dot}  ${pad(host.alias, aw)}  ${GR}${pad(addr, hw)}${R}  ${label}  ${GR}(${ms}ms)${R}`,
+      );
+      return status;
+    }),
+  );
+
+  const up = results.filter((s) => s === "up").length;
+  const down = results.length - up;
+
+  console.log(
+    `\n  ${GR}Summary:${R} ${G}${up} reachable${R} · ${down > 0 ? `${RED}${down} unreachable${R}` : `${GR}0 unreachable${R}`}\n`,
+  );
+
+  if (down > 0) process.exit(1);
 }
 
 function copyToClipboard(text: string): boolean {
@@ -452,6 +508,9 @@ async function main(): Promise<void> {
       break;
     case "add":
       await cmdAdd(args.configPath);
+      break;
+    case "check":
+      await cmdCheck(args.configPath);
       break;
     case "copy":
       await cmdCopy(args.configPath, args.target);
