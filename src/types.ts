@@ -14,7 +14,7 @@ export interface AddOptions {
   identityFilePath?: string;
 }
 
-export type Command = "connect" | "add" | "remove" | "list" | "edit";
+export type Command = "connect" | "add" | "remove" | "list" | "edit" | "copy";
 
 export interface EditOptions {
   hostname: string;
@@ -29,4 +29,5 @@ export interface CliArgs {
   jsonOutput: boolean;
   help: boolean;
   version: boolean;
+  target?: string;
 }

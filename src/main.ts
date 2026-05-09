@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +18,7 @@ USAGE
   ssha                  pick and connect to a server
   ssha add              add a new server to ~/.ssh/config
   ssha edit             pick and edit an existing server
+  ssha copy [alias]     copy ssh command to clipboard
   ssha remove, rm       pick and remove a server
   ssha list, ls         list all configured servers
 
@@ -30,6 +32,8 @@ EXAMPLES
   ssha                  interactive server picker
   ssha add              wizard to add a new server
   ssha edit             pick and edit a server
+  ssha copy             pick a server and copy ssh command
+  ssha copy my-server   copy ssh command for a specific server
   ssha rm               pick and remove a server
   ssha ls               show all configured servers
   ssha ls --json        list servers as JSON
@@ -42,6 +46,7 @@ function parseCliArgs(): CliArgs {
   let jsonOutput = false;
   let help = false;
   let version = false;
+  let target: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -51,6 +56,10 @@ function parseCliArgs(): CliArgs {
         break;
       case "edit":
         command = "edit";
+        break;
+      case "copy":
+        command = "copy";
+        if (args[i + 1] && !args[i + 1].startsWith("-")) target = args[++i];
         break;
       case "remove":
       case "rm":
@@ -77,7 +86,7 @@ function parseCliArgs(): CliArgs {
     }
   }
 
-  return { command, configPath, jsonOutput, help, version };
+  return { command, configPath, jsonOutput, help, version, target };
 }
 
 async function cmdConnect(configPath: string): Promise<void> {
@@ -131,6 +140,72 @@ async function cmdAdd(configPath: string): Promise<void> {
   });
 
   console.log(`\n✓ Server '${alias}' added to ${configPath}`);
+}
+
+function copyToClipboard(text: string): boolean {
+  if (process.platform === "darwin") {
+    return spawnSync("pbcopy", [], { input: text }).status === 0;
+  }
+  if (process.platform === "win32") {
+    return (
+      spawnSync("clip", [], { input: text, encoding: "utf-8" }).status === 0
+    );
+  }
+  for (const [cmd, args] of [
+    ["xclip", ["-selection", "clipboard"]],
+    ["xsel", ["--clipboard", "--input"]],
+    ["wl-copy", []],
+  ] as [string, string[]][]) {
+    if (spawnSync(cmd, args, { input: text }).status === 0) return true;
+  }
+  return false;
+}
+
+async function cmdCopy(configPath: string, alias?: string): Promise<void> {
+  if (!existsSync(configPath)) {
+    console.log(
+      "No SSH config found. Run `ssha add` to add your first server.",
+    );
+    return;
+  }
+
+  const usage = readUsage();
+  const hosts = sortByLastUse(
+    parseHosts(readFileSync(configPath, "utf-8")),
+    usage,
+  );
+
+  if (hosts.length === 0) {
+    console.log("No servers configured. Run `ssha add` to add one.");
+    return;
+  }
+
+  let selected: (typeof hosts)[0] | null | undefined;
+
+  if (alias) {
+    selected = hosts.find((h) => h.alias.toLowerCase() === alias.toLowerCase());
+    if (!selected) {
+      console.error(`Error: server '${alias}' not found.`);
+      process.exit(1);
+    }
+  } else {
+    selected = await selectHost(hosts, {
+      title: "Select server to copy",
+      usage,
+    });
+  }
+
+  if (!selected) return;
+
+  const cmd = `ssh ${selected.alias}`;
+  if (copyToClipboard(cmd)) {
+    console.log(`✓ Copied to clipboard: ${cmd}`);
+  } else {
+    console.log(cmd);
+    console.error(
+      "Could not copy to clipboard. Install xclip, xsel or wl-copy.",
+    );
+  }
 }
 
 async function cmdEdit(configPath: string): Promise<void> {
@@ -318,6 +393,9 @@ async function main(): Promise<void> {
       break;
     case "add":
       await cmdAdd(args.configPath);
+      break;
+    case "copy":
+      await cmdCopy(args.configPath, args.target);
       break;
     case "edit":
       await cmdEdit(args.configPath);
