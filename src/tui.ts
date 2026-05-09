@@ -1,5 +1,7 @@
 import * as readline from "node:readline";
 import type { SshHost } from "./types.js";
+import type { UsageMap } from "./usage.js";
+import { formatAge } from "./usage.js";
 
 const C = {
   reset: "\x1b[0m",
@@ -9,12 +11,29 @@ const C = {
   yellow: "\x1b[33m",
   gray: "\x1b[90m",
   clearLine: "\x1b[2K",
+  clearDown: "\x1b[J",
   cursorHide: "\x1b[?25l",
   cursorShow: "\x1b[?25h",
   up: (n: number) => `\x1b[${n}A`,
 };
 
-function hostLine(host: SshHost, selected: boolean): string {
+interface SelectOptions {
+  title?: string;
+  usage?: UsageMap;
+}
+
+function filterHosts(hosts: SshHost[], query: string): SshHost[] {
+  if (!query) return hosts;
+  const q = query.toLowerCase();
+  return hosts.filter(
+    (h) =>
+      h.alias.toLowerCase().includes(q) ||
+      h.hostname.toLowerCase().includes(q) ||
+      (h.user ?? "").toLowerCase().includes(q),
+  );
+}
+
+function hostLine(host: SshHost, selected: boolean, usage: UsageMap): string {
   const arrow = selected ? `${C.green}›${C.reset} ` : "  ";
   const alias = selected ? `${C.bold}${host.alias}${C.reset}` : host.alias;
   const user = host.user ? ` ${C.cyan}${host.user}@${C.reset}` : "";
@@ -24,12 +43,14 @@ function hostLine(host: SshHost, selected: boolean): string {
       : "";
   const port =
     host.port && host.port !== 22 ? ` ${C.yellow}:${host.port}${C.reset}` : "";
-  return `${arrow}${alias}${user}${hn}${port}`;
+  const ts = usage[host.alias];
+  const age = ts ? ` ${C.gray}${formatAge(ts)}${C.reset}` : "";
+  return `${arrow}${alias}${user}${hn}${port}${age}`;
 }
 
 export async function selectHost(
   hosts: SshHost[],
-  title = "Select SSH server",
+  { title = "Select SSH server", usage = {} }: SelectOptions = {},
 ): Promise<SshHost | null> {
   if (!process.stdin.isTTY) {
     console.error("Error: interactive selection requires a TTY.");
@@ -41,31 +62,47 @@ export async function selectHost(
   return new Promise((resolve) => {
     let index = 0;
     let rendered = 0;
+    let query = "";
+    let filtered = hosts;
 
-    const lines = () => [
-      `${C.bold}  ${title}${C.reset} ${C.gray}(↑↓ navigate · Enter connect · q quit)${C.reset}`,
-      "",
-      ...hosts.map((h, i) => hostLine(h, i === index)),
-      "",
-    ];
+    const buildLines = (): string[] => {
+      const searchBar = query
+        ? `  ${C.cyan}/${C.reset} ${query}${C.gray}_${C.reset}`
+        : `  ${C.gray}/ type to filter${C.reset}`;
+
+      const hostLines =
+        filtered.length > 0
+          ? filtered.map((h, i) => hostLine(h, i === index, usage))
+          : [`  ${C.gray}No matches for "${query}"${C.reset}`];
+
+      return [
+        `${C.bold}  ${title}${C.reset} ${C.gray}(↑↓ · Enter · Esc clear · q quit)${C.reset}`,
+        searchBar,
+        "",
+        ...hostLines,
+        "",
+      ];
+    };
 
     const render = () => {
       if (rendered > 0) process.stdout.write(C.up(rendered));
-      const output = lines();
+      const output = buildLines();
       rendered = output.length;
       for (const l of output) process.stdout.write(`${C.clearLine}${l}\n`);
+      process.stdout.write(C.clearDown);
     };
 
     const cleanup = () => {
       process.stdin.setRawMode(false);
       process.stdin.pause();
       process.stdout.write(C.cursorShow);
-      if (rendered > 0) {
-        process.stdout.write(C.up(rendered));
-        for (let i = 0; i < rendered; i++)
-          process.stdout.write(`${C.clearLine}\n`);
-        process.stdout.write(C.up(rendered));
-      }
+      if (rendered > 0) process.stdout.write(C.up(rendered) + C.clearDown);
+    };
+
+    const exit = (result: SshHost | null) => {
+      process.stdin.off("data", onData);
+      cleanup();
+      resolve(result);
     };
 
     process.stdin.setRawMode(true);
@@ -76,25 +113,66 @@ export async function selectHost(
     render();
 
     const onData = (key: string) => {
-      if (key === "\x03" || key === "q") {
-        process.stdin.off("data", onData);
-        cleanup();
-        resolve(null);
+      // Ctrl+C — always quit
+      if (key === "\x03") {
+        exit(null);
         return;
       }
+
+      // Enter — connect to selected
       if (key === "\r") {
-        process.stdin.off("data", onData);
-        cleanup();
-        resolve(hosts[index]);
+        if (filtered.length > 0) exit(filtered[index]);
         return;
       }
+
+      // Up arrow
       if (key === "\x1b[A") {
-        index = (index - 1 + hosts.length) % hosts.length;
+        if (filtered.length > 0)
+          index = (index - 1 + filtered.length) % filtered.length;
         render();
         return;
       }
+
+      // Down arrow
       if (key === "\x1b[B") {
-        index = (index + 1) % hosts.length;
+        if (filtered.length > 0) index = (index + 1) % filtered.length;
+        render();
+        return;
+      }
+
+      // Escape — clear query if active, quit if empty
+      if (key === "\x1b") {
+        if (query) {
+          query = "";
+          filtered = hosts;
+          index = 0;
+          render();
+        } else {
+          exit(null);
+        }
+        return;
+      }
+
+      // Backspace
+      if (key === "\x7f" || key === "\x08") {
+        query = query.slice(0, -1);
+        filtered = filterHosts(hosts, query);
+        index = 0;
+        render();
+        return;
+      }
+
+      // 'q' quits only when search is empty
+      if (key === "q" && !query) {
+        exit(null);
+        return;
+      }
+
+      // Printable characters → append to search query
+      if (key.length === 1 && key.charCodeAt(0) >= 32) {
+        query += key;
+        filtered = filterHosts(hosts, query);
+        index = 0;
         render();
         return;
       }
@@ -102,11 +180,10 @@ export async function selectHost(
 
     process.stdin.on("data", onData);
 
-    const onSigterm = () => {
+    process.once("SIGTERM", () => {
       cleanup();
       process.exit(0);
-    };
-    process.once("SIGTERM", onSigterm);
+    });
   });
 }
 

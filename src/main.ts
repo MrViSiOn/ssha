@@ -5,6 +5,7 @@ import { addHost, parseHosts, removeHost } from "./parser.js";
 import { connect } from "./ssh.js";
 import { confirm, prompt, selectHost } from "./tui.js";
 import type { CliArgs, Command } from "./types.js";
+import { readUsage, recordUsage, sortByLastUse } from "./usage.js";
 
 const VERSION = "0.1.0";
 const DEFAULT_CONFIG = join(homedir(), ".ssh", "config");
@@ -82,16 +83,21 @@ async function cmdConnect(configPath: string): Promise<void> {
     return;
   }
 
-  const hosts = parseHosts(readFileSync(configPath, "utf-8"));
+  const usage = readUsage();
+  const hosts = sortByLastUse(
+    parseHosts(readFileSync(configPath, "utf-8")),
+    usage,
+  );
 
   if (hosts.length === 0) {
     console.log("No servers configured. Run `assh add` to add one.");
     return;
   }
 
-  const selected = await selectHost(hosts);
+  const selected = await selectHost(hosts, { usage });
   if (!selected) return;
 
+  recordUsage(selected.alias);
   connect(selected.alias);
 }
 
@@ -128,14 +134,21 @@ async function cmdRemove(configPath: string): Promise<void> {
     return;
   }
 
-  const hosts = parseHosts(readFileSync(configPath, "utf-8"));
+  const usage = readUsage();
+  const hosts = sortByLastUse(
+    parseHosts(readFileSync(configPath, "utf-8")),
+    usage,
+  );
 
   if (hosts.length === 0) {
     console.log("No servers to remove.");
     return;
   }
 
-  const selected = await selectHost(hosts, "Select server to remove");
+  const selected = await selectHost(hosts, {
+    title: "Select server to remove",
+    usage,
+  });
   if (!selected) return;
 
   const ok = await confirm(
