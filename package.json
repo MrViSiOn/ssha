@@ -1,0 +1,34 @@
+{
+  "name": "assh",
+  "version": "0.1.0",
+  "description": "TUI command to manage and connect to SSH servers from ~/.ssh/config",
+  "type": "module",
+  "bin": {
+    "assh": "index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "dist/"
+  ],
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/main.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "lint": "oxlint src/ tests/",
+    "lint:fix": "oxlint --fix src/ tests/",
+    "fmt": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "fmt:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "prepublishOnly": "pnpm build && pnpm lint && pnpm fmt:check"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "oxlint": "^1.0.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}
