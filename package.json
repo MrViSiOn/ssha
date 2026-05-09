@@ -1,10 +1,10 @@
 {
-  "name": "assh",
+  "name": "ssha",
   "version": "0.1.0",
   "description": "TUI command to manage and connect to SSH servers from ~/.ssh/config",
   "type": "module",
   "bin": {
-    "assh": "index.mjs"
+    "ssha": "index.mjs"
   },
   "files": [
     "index.mjs",

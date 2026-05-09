@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import type { SshHost } from "./types.js";
 
-const HISTORY_PATH = join(homedir(), ".config", "assh", "history.json");
+const HISTORY_PATH = join(homedir(), ".config", "ssha", "history.json");
 
 export type UsageMap = Record<string, number>; // alias → timestamp ms
 

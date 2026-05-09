@@ -11,13 +11,13 @@ const VERSION = "0.1.0";
 const DEFAULT_CONFIG = join(homedir(), ".ssh", "config");
 
 const HELP = `
-assh — SSH Server Manager
+ssha — SSH Server Manager
 
 USAGE
-  assh                  pick and connect to a server
-  assh add              add a new server to ~/.ssh/config
-  assh remove, rm       pick and remove a server
-  assh list, ls         list all configured servers
+  ssha                  pick and connect to a server
+  ssha add              add a new server to ~/.ssh/config
+  ssha remove, rm       pick and remove a server
+  ssha list, ls         list all configured servers
 
 OPTIONS
   --config <path>       use alternative SSH config (default: ~/.ssh/config)
@@ -26,11 +26,11 @@ OPTIONS
   -h, --help            show this help
 
 EXAMPLES
-  assh                  interactive server picker
-  assh add              wizard to add a new server
-  assh rm               pick and remove a server
-  assh ls               show all configured servers
-  assh ls --json        list servers as JSON
+  ssha                  interactive server picker
+  ssha add              wizard to add a new server
+  ssha rm               pick and remove a server
+  ssha ls               show all configured servers
+  ssha ls --json        list servers as JSON
 `.trim();
 
 function parseCliArgs(): CliArgs {
@@ -78,7 +78,7 @@ function parseCliArgs(): CliArgs {
 async function cmdConnect(configPath: string): Promise<void> {
   if (!existsSync(configPath)) {
     console.log(
-      "No SSH config found. Run `assh add` to add your first server.",
+      "No SSH config found. Run `ssha add` to add your first server.",
     );
     return;
   }
@@ -90,7 +90,7 @@ async function cmdConnect(configPath: string): Promise<void> {
   );
 
   if (hosts.length === 0) {
-    console.log("No servers configured. Run `assh add` to add one.");
+    console.log("No servers configured. Run `ssha add` to add one.");
     return;
   }
 
@@ -170,7 +170,7 @@ function pad(s: string, w: number): string {
 function cmdList(configPath: string, json: boolean): void {
   if (!existsSync(configPath)) {
     if (json) process.stdout.write("[]\n");
-    else console.log("No servers configured. Run `assh add` to add one.");
+    else console.log("No servers configured. Run `ssha add` to add one.");
     return;
   }
 
@@ -189,7 +189,7 @@ function cmdList(configPath: string, json: boolean): void {
   }
 
   if (hosts.length === 0) {
-    console.log("No servers configured. Run `assh add` to add one.");
+    console.log("No servers configured. Run `ssha add` to add one.");
     return;
   }
 

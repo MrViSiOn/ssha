@@ -1,4 +1,4 @@
-# assh — SSH Server Manager
+# ssha — SSH Server Manager
 
 TUI command to manage and connect to SSH servers defined in `~/.ssh/config`.
 
@@ -29,11 +29,11 @@ pnpm hooks:install  # register git hooks
 ## Commands
 
 ```
-assh              → interactive server picker → connect
-assh add          → wizard to add a server to config
-assh rm           → pick and remove a server
-assh ls           → list all servers (--json for JSON output)
-assh --config <f> → use alternative SSH config file
+ssha              → interactive server picker → connect
+ssha add          → wizard to add a server to config
+ssha rm           → pick and remove a server
+ssha ls           → list all servers (--json for JSON output)
+ssha --config <f> → use alternative SSH config file
 ```
 
 ## Security invariants — NEVER violate
