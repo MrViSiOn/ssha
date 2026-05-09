@@ -29,7 +29,8 @@ function filterHosts(hosts: SshHost[], query: string): SshHost[] {
     (h) =>
       h.alias.toLowerCase().includes(q) ||
       h.hostname.toLowerCase().includes(q) ||
-      (h.user ?? "").toLowerCase().includes(q),
+      (h.user ?? "").toLowerCase().includes(q) ||
+      h.tags.some((t) => t.toLowerCase().includes(q)),
   );
 }
 
@@ -43,9 +44,11 @@ function hostLine(host: SshHost, selected: boolean, usage: UsageMap): string {
       : "";
   const port =
     host.port && host.port !== 22 ? ` ${C.yellow}:${host.port}${C.reset}` : "";
+  const tags =
+    host.tags.length > 0 ? ` ${C.gray}[${host.tags.join(", ")}]${C.reset}` : "";
   const ts = usage[host.alias];
   const age = ts ? ` ${C.gray}${formatAge(ts)}${C.reset}` : "";
-  return `${arrow}${alias}${user}${hn}${port}${age}`;
+  return `${arrow}${alias}${user}${hn}${port}${tags}${age}`;
 }
 
 export async function selectHost(

@@ -4,6 +4,7 @@ export interface SshHost {
   user?: string;
   port?: number;
   hasIdentityFile: boolean;
+  tags: string[];
 }
 
 export interface AddOptions {
@@ -12,6 +13,7 @@ export interface AddOptions {
   user?: string;
   port?: number;
   identityFilePath?: string;
+  tags?: string[];
 }
 
 export type Command = "connect" | "add" | "remove" | "list" | "edit" | "copy";
@@ -21,6 +23,7 @@ export interface EditOptions {
   user: string | null;
   port: number | null;
   identityFilePath?: string | null;
+  tags: string[];
 }
 
 export interface CliArgs {

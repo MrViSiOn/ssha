@@ -8,6 +8,7 @@ interface HostBlock {
   user?: string;
   port?: number;
   identityFilePath?: string;
+  tags?: string[];
 }
 
 function parseKey(line: string): { key: string; value: string } | null {
@@ -32,7 +33,21 @@ function toSshHost(block: HostBlock): SshHost {
     user: block.user,
     port: block.port,
     hasIdentityFile: !!block.identityFilePath,
+    tags: block.tags ?? [],
   };
+}
+
+function parseTags(line: string): string[] | null {
+  const match = line.trim().match(/^#\s*ssha:tags=(.*)$/);
+  if (!match) return null;
+  return match[1]
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function tagsLine(tags: string[]): string {
+  return `    # ssha:tags=${tags.join(",")}`;
 }
 
 export function parseHosts(content: string): SshHost[] {
@@ -40,6 +55,12 @@ export function parseHosts(content: string): SshHost[] {
   let current: HostBlock | null = null;
 
   for (const line of content.split("\n")) {
+    const tags = parseTags(line);
+    if (tags && current) {
+      current.tags = tags;
+      continue;
+    }
+
     const pair = parseKey(line);
     if (!pair) continue;
 
@@ -84,6 +105,7 @@ export function addHost(configPath: string, opts: AddOptions): void {
   }
 
   let block = `\nHost ${opts.alias}\n`;
+  if (opts.tags && opts.tags.length > 0) block += `${tagsLine(opts.tags)}\n`;
   block += `    HostName ${opts.hostname}\n`;
   if (opts.user) block += `    User ${opts.user}\n`;
   if (opts.port && opts.port !== 22) block += `    Port ${opts.port}\n`;
@@ -159,7 +181,7 @@ export function editHost(
 
   if (blockStart === -1) return false;
 
-  // Read current identityfile internally — never exposed to the UI layer
+  // Read current identityfile and tags internally — paths never exposed to the UI layer
   let currentIdentityFile: string | null = null;
   for (const line of lines.slice(blockStart, blockEnd)) {
     const pair = parseKey(line);
@@ -172,6 +194,7 @@ export function editHost(
       : opts.identityFilePath || null;
 
   const blockLines: string[] = [`Host ${alias}`];
+  if (opts.tags.length > 0) blockLines.push(tagsLine(opts.tags));
   blockLines.push(`    HostName ${opts.hostname}`);
   if (opts.user) blockLines.push(`    User ${opts.user}`);
   if (opts.port && opts.port !== 22) blockLines.push(`    Port ${opts.port}`);

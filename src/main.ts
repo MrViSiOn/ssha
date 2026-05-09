@@ -130,6 +130,11 @@ async function cmdAdd(configPath: string): Promise<void> {
   const user = await prompt("Username");
   const portStr = await prompt("Port (default 22)");
   const identityFilePath = await prompt("Path to private key (IdentityFile)");
+  const tagsStr = await prompt("Tags (comma-separated, e.g. prod,web)");
+  const tags = tagsStr
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
   addHost(configPath, {
     alias,
@@ -137,6 +142,7 @@ async function cmdAdd(configPath: string): Promise<void> {
     user: user || undefined,
     port: portStr ? parseInt(portStr, 10) : undefined,
     identityFilePath: identityFilePath || undefined,
+    tags,
   });
 
   console.log(`\n✓ Server '${alias}' added to ${configPath}`);
@@ -266,11 +272,22 @@ async function cmdEdit(configPath: string): Promise<void> {
     identityFilePath = newKey || null;
   }
 
+  const tagsStr = await prompt(
+    "Tags (comma-separated)",
+    false,
+    selected.tags.join(","),
+  );
+  const tags = tagsStr
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+
   editHost(configPath, selected.alias, {
     hostname: hostname || selected.hostname,
     user: user || null,
     port: portStr ? parseInt(portStr, 10) : null,
     identityFilePath,
+    tags,
   });
 
   console.log(`\n✓ Server '${selected.alias}' updated.`);
@@ -349,6 +366,7 @@ function cmdList(configPath: string, json: boolean): void {
   const aw = Math.max(5, ...hosts.map((h) => h.alias.length));
   const hw = Math.max(8, ...hosts.map((h) => h.hostname.length));
   const uw = Math.max(4, ...hosts.map((h) => (h.user ?? "").length));
+  const tw = Math.max(4, ...hosts.map((h) => h.tags.join(", ").length));
 
   console.log(
     [
@@ -357,9 +375,10 @@ function cmdList(configPath: string, json: boolean): void {
       `${B}${pad("USER", uw)}${R}`,
       `${B}PORT${R}`,
       `${B}KEY${R}`,
+      `${B}${pad("TAGS", tw)}${R}`,
     ].join("  "),
   );
-  console.log(`${G}${"-".repeat(aw + hw + uw + 4 + 4 + 8)}${R}`);
+  console.log(`${G}${"-".repeat(aw + hw + uw + tw + 4 + 4 + 10)}${R}`);
 
   for (const h of hosts) {
     console.log(
@@ -369,6 +388,7 @@ function cmdList(configPath: string, json: boolean): void {
         pad(h.user ?? "-", uw),
         pad(String(h.port ?? 22), 4),
         h.hasIdentityFile ? "✓" : "-",
+        `${G}${h.tags.join(", ") || "-"}${R}`,
       ].join("  "),
     );
   }
