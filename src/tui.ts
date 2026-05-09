@@ -206,6 +206,7 @@ export async function confirm(question: string): Promise<boolean> {
 export async function prompt(
   question: string,
   required = false,
+  defaultValue = "",
 ): Promise<string> {
   return new Promise((resolve) => {
     const rl = readline.createInterface({
@@ -214,17 +215,19 @@ export async function prompt(
     });
 
     const ask = () => {
-      const hint = required
-        ? `${C.gray}(required)${C.reset}`
-        : `${C.gray}(optional, Enter to skip)${C.reset}`;
+      const hint = defaultValue
+        ? `${C.gray}(current: ${defaultValue}, Enter to keep)${C.reset}`
+        : required
+          ? `${C.gray}(required)${C.reset}`
+          : `${C.gray}(optional, Enter to skip)${C.reset}`;
       rl.question(`${C.cyan}?${C.reset} ${question} ${hint}: `, (answer) => {
         const v = answer.trim();
-        if (required && !v) {
+        if (required && !v && !defaultValue) {
           ask();
           return;
         }
         rl.close();
-        resolve(v);
+        resolve(v !== "" ? v : defaultValue);
       });
     };
 

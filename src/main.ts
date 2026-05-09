@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { addHost, parseHosts, removeHost } from "./parser.js";
+import { addHost, editHost, parseHosts, removeHost } from "./parser.js";
 import { connect } from "./ssh.js";
 import { confirm, prompt, selectHost } from "./tui.js";
 import type { CliArgs, Command } from "./types.js";
@@ -16,6 +16,7 @@ ssha — SSH Server Manager
 USAGE
   ssha                  pick and connect to a server
   ssha add              add a new server to ~/.ssh/config
+  ssha edit             pick and edit an existing server
   ssha remove, rm       pick and remove a server
   ssha list, ls         list all configured servers
 
@@ -28,6 +29,7 @@ OPTIONS
 EXAMPLES
   ssha                  interactive server picker
   ssha add              wizard to add a new server
+  ssha edit             pick and edit a server
   ssha rm               pick and remove a server
   ssha ls               show all configured servers
   ssha ls --json        list servers as JSON
@@ -46,6 +48,9 @@ function parseCliArgs(): CliArgs {
     switch (arg) {
       case "add":
         command = "add";
+        break;
+      case "edit":
+        command = "edit";
         break;
       case "remove":
       case "rm":
@@ -126,6 +131,74 @@ async function cmdAdd(configPath: string): Promise<void> {
   });
 
   console.log(`\n✓ Server '${alias}' added to ${configPath}`);
+}
+
+async function cmdEdit(configPath: string): Promise<void> {
+  if (!existsSync(configPath)) {
+    console.log(
+      "No SSH config found. Run `ssha add` to add your first server.",
+    );
+    return;
+  }
+
+  const usage = readUsage();
+  const hosts = sortByLastUse(
+    parseHosts(readFileSync(configPath, "utf-8")),
+    usage,
+  );
+
+  if (hosts.length === 0) {
+    console.log("No servers configured. Run `ssha add` to add one.");
+    return;
+  }
+
+  const selected = await selectHost(hosts, {
+    title: "Select server to edit",
+    usage,
+  });
+  if (!selected) return;
+
+  console.log(`\nEditing '${selected.alias}':\n`);
+
+  const hostname = await prompt(
+    "Hostname or IP",
+    true,
+    selected.hostname !== selected.alias
+      ? selected.hostname
+      : selected.hostname,
+  );
+  const user = await prompt("Username", false, selected.user ?? "");
+  const portStr = await prompt(
+    "Port",
+    false,
+    selected.port ? String(selected.port) : "",
+  );
+
+  let identityFilePath: string | null | undefined;
+  if (selected.hasIdentityFile) {
+    const newKey = await prompt(
+      "New path to private key (leave blank to keep, 'clear' to remove)",
+    );
+    if (!newKey) {
+      identityFilePath = undefined;
+    } else if (newKey === "clear") {
+      identityFilePath = null;
+    } else {
+      identityFilePath = newKey;
+    }
+  } else {
+    const newKey = await prompt("Path to private key (IdentityFile)");
+    identityFilePath = newKey || null;
+  }
+
+  editHost(configPath, selected.alias, {
+    hostname: hostname || selected.hostname,
+    user: user || null,
+    port: portStr ? parseInt(portStr, 10) : null,
+    identityFilePath,
+  });
+
+  console.log(`\n✓ Server '${selected.alias}' updated.`);
 }
 
 async function cmdRemove(configPath: string): Promise<void> {
@@ -245,6 +318,9 @@ async function main(): Promise<void> {
       break;
     case "add":
       await cmdAdd(args.configPath);
+      break;
+    case "edit":
+      await cmdEdit(args.configPath);
       break;
     case "remove":
       await cmdRemove(args.configPath);

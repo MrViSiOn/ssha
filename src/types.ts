@@ -14,7 +14,14 @@ export interface AddOptions {
   identityFilePath?: string;
 }
 
-export type Command = "connect" | "add" | "remove" | "list";
+export type Command = "connect" | "add" | "remove" | "list" | "edit";
+
+export interface EditOptions {
+  hostname: string;
+  user: string | null;
+  port: number | null;
+  identityFilePath?: string | null;
+}
 
 export interface CliArgs {
   command: Command;
