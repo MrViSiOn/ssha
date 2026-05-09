@@ -1,13 +1,27 @@
 # assh
 
-A fast TUI command to manage and connect to SSH servers defined in `~/.ssh/config`.
+> Manage and connect to SSH servers from your terminal — fast.
+
+A minimal TUI command built on top of `~/.ssh/config`. No extra config files, no daemons, no cloud accounts. Just your existing SSH setup, with a keyboard-driven interface.
 
 ```
-assh              pick and connect to a server
-assh add          add a new server
-assh rm           remove a server
-assh ls           list all configured servers
+assh              → pick a server and connect
+assh add          → add a new server (wizard)
+assh rm           → remove a server
+assh ls           → list all servers
 ```
+
+## Demo
+
+```
+  Select SSH server  (↑↓ · Enter · Esc clear · q quit)
+  / prod
+
+› production  root@ → prod.example.com :2222  2h ago
+  prod-db     deploy@ → db.prod.internal      1d ago
+```
+
+Servers are sorted by **last used**, most recent first. Type to filter live — by alias, hostname, or username. Press Enter to connect.
 
 ## Install
 
@@ -21,98 +35,102 @@ Or run without installing:
 npx assh
 ```
 
-## Usage
+Requires **Node.js ≥ 22.6.0** and **OpenSSH** (`ssh` in PATH).
 
-### Connect to a server
+## Commands
 
-```
-$ assh
+### `assh` — pick and connect
 
-  Select SSH server (↑↓ navigate · Enter connect · q quit)
+Opens an interactive list of your SSH servers. Navigate with `↑↓`, press `Enter` to connect, `q` or `Esc` to quit.
 
-› web1 ubuntu@ → 192.168.1.10
-  db   postgres@ → db.internal
-  prod → prod.example.com :2222
-```
+Start typing to filter in real time — the list narrows as you type. `Esc` clears the filter; `Ctrl+C` always exits.
 
-Use arrow keys to navigate, Enter to connect, `q` to quit.
+Last-used time is shown next to each server and the list is sorted by recency so your most-used servers are always at the top.
 
-### Add a server
+### `assh add` — add a server
 
 ```
 $ assh add
 
-? Server alias (required): my-server
-? Hostname or IP (required): 10.0.0.5
+? Server alias (required): staging
+? Hostname or IP (required): 10.0.1.50
 ? Username (optional, Enter to skip): deploy
-? Port (default 22) (optional, Enter to skip): 
+? Port (default 22) (optional, Enter to skip): 2222
 ? Path to private key (IdentityFile) (optional, Enter to skip): ~/.ssh/id_ed25519
 
-✓ Server 'my-server' added to /Users/you/.ssh/config
+✓ Server 'staging' added to /Users/you/.ssh/config
 ```
 
-### Remove a server
+Appends a `Host` block to `~/.ssh/config`. Creates the file with permissions `600` if it does not exist.
 
-```
-$ assh rm
+### `assh rm` — remove a server
 
-  Select server to remove (↑↓ navigate · Enter connect · q quit)
+Opens the same interactive list. Select a server, confirm deletion, and its `Host` block is removed from `~/.ssh/config`. All other blocks are left untouched.
 
-› web1
-  db
-
-? Remove 'web1' (192.168.1.10)? (y/N) y
-✓ Server 'web1' removed.
-```
-
-### List servers
+### `assh ls` — list servers
 
 ```
 $ assh ls
 
-ALIAS     HOSTNAME        USER      PORT  KEY
--------------------------------------------------
-web1      192.168.1.10    ubuntu    22    -
-db        db.internal     postgres  22    ✓
-prod      prod.example.com  -       2222  ✓
+ALIAS       HOSTNAME              USER    PORT  KEY
+----------------------------------------------------
+production  prod.example.com      root    2222  ✓
+staging     10.0.1.50             deploy  2222  ✓
+db          db.internal           -       22    -
+```
 
-$ assh ls --json
+```bash
+# Machine-readable output
+assh ls --json
+```
+
+```json
 [
   {
-    "alias": "web1",
-    "hostname": "192.168.1.10",
-    "user": "ubuntu",
-    "port": 22,
-    "identityFile": false
-  },
-  ...
+    "alias": "production",
+    "hostname": "prod.example.com",
+    "user": "root",
+    "port": 2222,
+    "identityFile": true
+  }
 ]
 ```
 
-### Use an alternative config file
+### Options
 
-```bash
-assh --config ~/work/.ssh/config
-assh ls --config ~/work/.ssh/config
-```
+| Flag | Description |
+|------|-------------|
+| `--config <path>` | Use an alternative SSH config file |
+| `--json` | JSON output (list command only) |
+| `-v, --version` | Show version |
+| `-h, --help` | Show help |
 
 ## Security
 
-- **Private keys are never read or displayed.** assh only records the path to your key in `~/.ssh/config` and delegates all authentication to your system's `ssh` client.
-- The `KEY` column in `assh ls` shows only whether a key is configured (`✓` or `-`), never the path.
-- JSON output (`--json`) uses a boolean `identityFile` field, never the actual path.
+- **Private keys are never read or displayed.** assh writes the key path to `~/.ssh/config` and delegates all authentication to the system `ssh` client — it never touches key files.
+- `assh ls` and `--json` output show only whether a key is configured (`✓` / `true`), not the path.
 - `~/.ssh/config` is created with permissions `600` if it does not exist.
 - assh spawns the native `ssh` binary — it does not implement SSH itself.
-
-## Requirements
-
-- Node.js >= 22.6.0
-- OpenSSH (`ssh` command available in PATH)
+- Usage history is stored locally at `~/.config/assh/history.json` (timestamps only, no credentials).
 
 ## Compatibility
 
-macOS and Linux. Requires a TTY for interactive commands (`connect`, `add`, `remove`).
+macOS and Linux. Interactive commands (`assh`, `assh add`, `assh rm`) require a TTY.
+
+## Development
+
+```bash
+git clone https://github.com/MrViSiOn/assh.git
+cd assh
+pnpm install
+pnpm build          # compile TypeScript → dist/
+pnpm dev            # run directly with tsx (no build step)
+pnpm test           # run tests
+pnpm lint           # oxlint
+pnpm fmt            # prettier
+pnpm hooks:install  # register git pre-commit hook
+```
 
 ## License
 
-MIT
+MIT © [MrViSiOn](https://github.com/MrViSiOn)
