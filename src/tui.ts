@@ -90,25 +90,45 @@ export async function selectHost(
     let query = "";
     let filtered = hosts;
     let active = true;
+    let scrollOffset = 0;
     const statusMap: Record<string, HostStatus> = {};
+
+    const visibleCount = () => Math.max(3, (process.stdout.rows ?? 24) - 6);
+
+    const ensureVisible = () => {
+      const vis = visibleCount();
+      if (index < scrollOffset) scrollOffset = index;
+      else if (index >= scrollOffset + vis) scrollOffset = index - vis + 1;
+      if (scrollOffset < 0) scrollOffset = 0;
+    };
 
     const buildLines = (): string[] => {
       const searchBar = query
         ? `  ${C.cyan}/${C.reset} ${query}${C.gray}_${C.reset}`
         : `  ${C.gray}/ type to filter${C.reset}`;
 
-      const hostLines =
-        filtered.length > 0
-          ? filtered.map((h, i) =>
-              hostLine(h, i === index, usage, statusMap[h.alias]),
-            )
-          : [`  ${C.gray}No matches for "${query}"${C.reset}`];
-
       const hasTunnels =
         filtered.length > 0 && (filtered[index]?.tunnels.length ?? 0) > 0;
       const tunnelHint = hasTunnels
         ? ` · ${C.yellow}f${C.reset}${C.gray} tunnel${C.reset}`
         : "";
+
+      let hostLines: string[];
+      if (filtered.length === 0) {
+        hostLines = [`  ${C.gray}No matches for "${query}"${C.reset}`];
+      } else {
+        const vis = visibleCount();
+        const slice = filtered.slice(scrollOffset, scrollOffset + vis);
+        const above = scrollOffset;
+        const below = filtered.length - scrollOffset - vis;
+        hostLines = [
+          ...(above > 0 ? [`  ${C.gray}↑ ${above} more${C.reset}`] : []),
+          ...slice.map((h, i) =>
+            hostLine(h, scrollOffset + i === index, usage, statusMap[h.alias]),
+          ),
+          ...(below > 0 ? [`  ${C.gray}↓ ${below} more${C.reset}`] : []),
+        ];
+      }
 
       return [
         `${C.bold}  ${title}${C.reset} ${C.gray}(↑↓ · Enter · Esc · q quit${C.reset}${tunnelHint}${C.gray})${C.reset}`,
@@ -137,6 +157,7 @@ export async function selectHost(
     const exit = (result: SshHost | null) => {
       active = false;
       process.stdin.off("data", onData);
+      process.stdout.off("resize", onResize);
       cleanup();
       resolve(result);
     };
@@ -165,6 +186,7 @@ export async function selectHost(
       if (key === "\x1b[A") {
         if (filtered.length > 0)
           index = (index - 1 + filtered.length) % filtered.length;
+        ensureVisible();
         render();
         return;
       }
@@ -172,6 +194,7 @@ export async function selectHost(
       // Down arrow
       if (key === "\x1b[B") {
         if (filtered.length > 0) index = (index + 1) % filtered.length;
+        ensureVisible();
         render();
         return;
       }
@@ -182,6 +205,7 @@ export async function selectHost(
           query = "";
           filtered = hosts;
           index = 0;
+          scrollOffset = 0;
           render();
         } else {
           exit(null);
@@ -194,6 +218,7 @@ export async function selectHost(
         query = query.slice(0, -1);
         filtered = filterHosts(hosts, query);
         index = 0;
+        scrollOffset = 0;
         render();
         return;
       }
@@ -219,6 +244,7 @@ export async function selectHost(
         query += key;
         filtered = filterHosts(hosts, query);
         index = 0;
+        scrollOffset = 0;
         render();
         return;
       }
@@ -235,9 +261,16 @@ export async function selectHost(
       }
     }
 
+    const onResize = () => {
+      ensureVisible();
+      render();
+    };
+
     process.stdin.on("data", onData);
+    process.stdout.on("resize", onResize);
 
     process.once("SIGTERM", () => {
+      process.stdout.off("resize", onResize);
       cleanup();
       process.exit(0);
     });
